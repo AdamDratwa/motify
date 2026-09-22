@@ -1,0 +1,65 @@
+workflows:
+  ios-build:
+    name: Motify iOS Build
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      groups:
+        - firebase_ios # define in Codemagic UI: GOOGLE_SERVICE_INFO_PLIST (base64)
+        - app_store_credentials # define in Codemagic UI: App Store Connect API key
+    scripts:
+      - name: Restore GoogleService-Info.plist
+        script: |
+          if [ -n "${GOOGLE_SERVICE_INFO_PLIST:-}" ]; then
+            echo $GOOGLE_SERVICE_INFO_PLIST | base64 --decode > ios/Runner/GoogleService-Info.plist
+          fi
+      - name: Get Flutter packages
+        script: flutter packages pub get
+      - name: Install pods
+        script: |
+          cd ios && pod install
+      - name: Flutter build ipa
+        script: |
+          flutter build ipa --release \
+            --export-options-plist=ios/ExportOptions.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - flutter_drive.log
+    publishing:
+      email:
+        recipients:
+          - dratwa.adam@gmail.com
+        notify:
+          success: true
+          failure: true
+
+  android-build:
+    name: Motify Android Build
+    max_build_duration: 30
+    instance_type: linux_x2
+    environment:
+      flutter: stable
+      groups:
+        - firebase_android # define in Codemagic UI: GOOGLE_SERVICES_JSON (base64)
+    scripts:
+      - name: Restore google-services.json
+        script: |
+          if [ -n "${GOOGLE_SERVICES_JSON:-}" ]; then
+            echo $GOOGLE_SERVICES_JSON | base64 --decode > android/app/google-services.json
+          fi
+      - name: Get Flutter packages
+        script: flutter packages pub get
+      - name: Flutter build apk
+        script: flutter build apk --release
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
+    publishing:
+      email:
+        recipients:
+          - dratwa.adam@gmail.com
+        notify:
+          success: true
+          failure: true
