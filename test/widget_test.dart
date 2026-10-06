@@ -8,6 +8,6 @@ void main() {
     await tester.pumpWidget(const ProviderScope(child: MotifyApp()));
     await tester.pump();
 
-    expect(find.text('Get started'), findsOneWidget);
+    expect(find.text('> INITIALIZE'), findsOneWidget);
   });
 }

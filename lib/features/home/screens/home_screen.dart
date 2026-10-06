@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/theme/motify_theme.dart';
+import '../../../core/widgets/motify_logo.dart';
+import '../../../core/widgets/terminal_widgets.dart';
+import '../../blocking/screens/blocking_setup_screen.dart';
 import '../../goals/models/gate_decision.dart';
 import '../../goals/models/goal_type.dart';
 import '../../goals/providers/goals_providers.dart';
@@ -55,41 +59,63 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final entries = ref.watch(gateDecisionsProvider);
+    final blockingEnabled = ref.watch(blockingEnabledProvider).valueOrNull;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Motify')),
-      floatingActionButton: FloatingActionButton(
+      appBar: AppBar(
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [MotifyLogo(size: 26), SizedBox(width: 10), Text('MOTIFY'), BlinkingCursor()],
+        ),
+        actions: [
+          if (blockingEnabled != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: blockingEnabled
+                  ? const StatusTag('● armed', color: MotifyColors.neon)
+                  : const StatusTag('○ disarmed', color: MotifyColors.danger),
+            ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const GoalEditorScreen()),
         ),
-        child: const Icon(Icons.add),
+        icon: const Icon(Icons.add),
+        label: const Text('LOCK APP'),
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          _refreshSteps();
-          await ref.read(todayStepsProvider.future).catchError((_) => 0);
-        },
-        child: entries.when(
-          data: (list) => ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 88),
-            children: [
-              if (list.isNotEmpty && ref.watch(blockingEnabledProvider).valueOrNull == false)
-                const _BlockingOffBanner(),
-              _TodayCard(entries: list, onRetry: _refreshSteps),
-              const SizedBox(height: 24),
-              if (list.isEmpty)
-                const _EmptyState()
-              else ...[
-                Text('Your goals', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                for (final entry in list) _AppRuleCard(entry: entry),
+      body: GridBackground(
+        child: RefreshIndicator(
+          onRefresh: () async {
+            _refreshSteps();
+            await ref.read(todayStepsProvider.future).catchError((_) => 0);
+          },
+          child: entries.when(
+            data: (list) => ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+              children: [
+                if (list.isNotEmpty && blockingEnabled == false) const _BlockingOffBanner(),
+                _TodayCard(entries: list, onRetry: _refreshSteps),
+                const SizedBox(height: 28),
+                if (list.isEmpty)
+                  const _EmptyState()
+                else ...[
+                  TerminalLabel('targets [${list.length}]'),
+                  const SizedBox(height: 10),
+                  for (final entry in list) _AppRuleCard(entry: entry),
+                ],
               ],
-            ],
-          ),
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, st) => ListView(
-            padding: const EdgeInsets.all(24),
-            children: [Text('Couldn\'t load your goals: $e', textAlign: TextAlign.center)],
+            ),
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, st) => ListView(
+              padding: const EdgeInsets.all(24),
+              children: [
+                Text(
+                  '> error: couldn\'t load your goals\n> $e',
+                  style: const TextStyle(color: MotifyColors.danger),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -105,7 +131,6 @@ class _TodayCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final steps = ref.watch(todayStepsProvider);
 
     if (steps.hasError && !steps.hasValue) {
@@ -116,14 +141,17 @@ class _TodayCard extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Today', style: theme.textTheme.titleMedium),
-              const SizedBox(height: 8),
-              Text(denied
-                  ? 'Motify needs permission to read your steps from Health Connect.'
-                  : 'Couldn\'t read your steps. Make sure Health Connect is installed '
-                      'and Motify is allowed to read steps.'),
+              const TerminalLabel('steps_today'),
               const SizedBox(height: 12),
-              FilledButton.tonal(
+              Text(
+                denied
+                    ? '> access denied: step data\nMotify needs permission to read your steps from Health Connect.'
+                    : '> error: step data unavailable\nMake sure Health Connect is installed '
+                        'and Motify is allowed to read steps.',
+                style: const TextStyle(color: MotifyColors.danger),
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
                 onPressed: () async {
                   try {
                     if (denied) await ref.read(stepServiceProvider).requestPermissions();
@@ -131,7 +159,7 @@ class _TodayCard extends ConsumerWidget {
                     onRetry();
                   }
                 },
-                child: Text(denied ? 'Allow step access' : 'Try again'),
+                child: Text(denied ? 'ALLOW STEP ACCESS' : 'TRY AGAIN'),
               ),
             ],
           ),
@@ -150,89 +178,121 @@ class _TodayCard extends ConsumerWidget {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox.square(
-              dimension: 96,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  CircularProgressIndicator(
-                    value: stepCount == null ? null : (next?.decision.progressFraction ?? 1),
-                    strokeWidth: 8,
-                    backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  ),
-                  const Center(child: Icon(Icons.directions_walk, size: 36)),
-                ],
-              ),
-            ),
-            const SizedBox(width: 20),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Steps today', style: theme.textTheme.labelLarge),
+            Row(
+              children: [
+                const Expanded(child: TerminalLabel('steps_today')),
+                if (entries.isNotEmpty)
                   Text(
-                    stepCount == null ? '…' : _number.format(stepCount),
-                    style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.bold),
+                    '$unlockedCount/${entries.length} unlocked',
+                    style: const TextStyle(color: MotifyColors.textDim, fontSize: 12),
                   ),
-                  const SizedBox(height: 4),
-                  if (stepCount != null) Text(_nextUnlockText(next)),
-                  if (entries.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      '$unlockedCount of ${entries.length} apps unlocked',
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ],
-                ],
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              stepCount == null ? '-----' : _number.format(stepCount),
+              style: TextStyle(
+                fontSize: 52,
+                height: 1.1,
+                fontWeight: FontWeight.w800,
+                color: MotifyColors.neon,
+                shadows: MotifyTheme.glow(MotifyColors.neon, blur: 18),
               ),
             ),
+            const SizedBox(height: 16),
+            SegmentedProgressBar(
+              value: stepCount == null ? 0 : (next?.decision.progressFraction ?? 1),
+              height: 10,
+            ),
+            const SizedBox(height: 12),
+            if (stepCount != null) _NextUnlockLine(entries: entries, next: next),
           ],
         ),
       ),
     );
   }
+}
 
-  String _nextUnlockText(GateDecisionEntry? next) {
-    if (entries.isEmpty) return 'Add a goal to start unlocking apps.';
-    if (next == null) return 'All apps unlocked for now. Nice work!';
+class _NextUnlockLine extends StatelessWidget {
+  final List<GateDecisionEntry> entries;
+  final GateDecisionEntry? next;
+  const _NextUnlockLine({required this.entries, required this.next});
+
+  @override
+  Widget build(BuildContext context) {
+    final next = this.next;
+    if (entries.isEmpty) {
+      return const Text('> add a target to start unlocking apps',
+          style: TextStyle(color: MotifyColors.textDim));
+    }
+    if (next == null) {
+      return const Text('> all targets unlocked. access granted.',
+          style: TextStyle(color: MotifyColors.neon));
+    }
     final left = next.decision.targetValue - next.decision.progressValue;
     final unit = next.rule.goalType.unitLabel(left);
-    return '${_number.format(left)} $unit to unlock ${next.rule.appDisplayName}';
+    return Text.rich(
+      TextSpan(children: [
+        const TextSpan(text: '> '),
+        TextSpan(
+          text: '${_number.format(left)} $unit',
+          style: const TextStyle(color: MotifyColors.neon, fontWeight: FontWeight.w700),
+        ),
+        const TextSpan(text: ' to unlock '),
+        TextSpan(
+          text: next.rule.appDisplayName,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ]),
+    );
   }
 }
 
-class _BlockingOffBanner extends ConsumerWidget {
+class _BlockingOffBanner extends StatelessWidget {
   const _BlockingOffBanner();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    return Card(
-      color: theme.colorScheme.errorContainer,
+  Widget build(BuildContext context) {
+    return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('App blocking is off', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 4),
-            const Text(
-              'Locked apps can still be opened. In the next screen, tap '
-              '"Motify app blocker" and switch it on.\n\n'
-              'If it\'s greyed out ("Restricted setting"): open Settings → Apps → '
-              'Motify, tap ⋮ in the top corner, choose "Allow restricted '
-              'settings", then try again.',
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: MotifyColors.danger.withValues(alpha: 0.06),
+        border: Border.all(color: MotifyColors.danger.withValues(alpha: 0.7)),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '⚠ BLOCKER OFFLINE',
+            style: TextStyle(
+              color: MotifyColors.danger,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.5,
+              shadows: MotifyTheme.glow(MotifyColors.danger),
             ),
-            const SizedBox(height: 12),
-            FilledButton(
-              onPressed: () => ref.read(appBlockingServiceProvider).requestBlockingPermission(),
-              child: const Text('Turn on blocking'),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Your locked apps can still be opened. Switching blocking on takes '
+            'about a minute in Android settings, and we\'ll guide you through it.',
+          ),
+          const SizedBox(height: 14),
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: MotifyColors.danger,
+              side: const BorderSide(color: MotifyColors.danger),
             ),
-          ],
-        ),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const BlockingSetupScreen()),
+            ),
+            child: const Text('SET UP BLOCKING'),
+          ),
+        ],
       ),
     );
   }
@@ -243,10 +303,15 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const Padding(
-        padding: EdgeInsets.all(24),
-        child: Text(
-          'No gated apps yet.\nTap + to pick an app and set a goal to unlock it.',
-          textAlign: TextAlign.center,
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('> no targets acquired.', style: TextStyle(color: MotifyColors.textDim)),
+            SizedBox(height: 6),
+            Text('> tap LOCK APP to pick your first doom-scroll app.',
+                style: TextStyle(color: MotifyColors.textDim)),
+          ],
         ),
       );
 }
@@ -261,39 +326,51 @@ class _AppRuleCard extends StatelessWidget {
     final decision = entry.decision;
     final unit = rule.goalType.unitLabel(decision.targetValue);
     final left = decision.targetValue - decision.progressValue;
+    final (label, color) = _status(decision.reason);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        leading: Icon(
-          decision.unlocked ? Icons.lock_open : Icons.lock_outline,
-          color: decision.unlocked ? Colors.green : Colors.redAccent,
-        ),
-        title: Text(rule.appDisplayName),
-        subtitle: Column(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(4),
+        side: BorderSide(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    rule.appDisplayName,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                StatusTag(label, color: color),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SegmentedProgressBar(value: decision.progressFraction, color: color),
+            const SizedBox(height: 8),
             Text(
               '${_number.format(decision.progressValue)} / '
               '${_number.format(decision.targetValue)} $unit'
               '${decision.reason == GateReason.goalNotMet ? ' · ${_number.format(left)} to go' : ''}',
-            ),
-            const SizedBox(height: 6),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(value: decision.progressFraction),
+              style: const TextStyle(color: MotifyColors.textDim, fontSize: 12),
             ),
           ],
         ),
-        trailing: Text(_reasonLabel(decision.reason)),
       ),
     );
   }
 
-  String _reasonLabel(GateReason reason) => switch (reason) {
-        GateReason.disabledByUser => 'Off',
-        GateReason.freeWindow => 'Free time',
-        GateReason.goalMet => 'Unlocked',
-        GateReason.goalNotMet => 'Locked',
+  (String, Color) _status(GateReason reason) => switch (reason) {
+        GateReason.disabledByUser => ('off', MotifyColors.textDim),
+        GateReason.freeWindow => ('free time', MotifyColors.cyan),
+        GateReason.goalMet => ('open', MotifyColors.neon),
+        GateReason.goalNotMet => ('locked', MotifyColors.danger),
       };
 }

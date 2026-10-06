@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
+import 'core/firebase_status.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,6 +19,7 @@ Future<void> main() async {
     }
   } catch (e) {
     debugPrint('Firebase not configured yet: $e');
+    firebaseStartupError = e;
   }
 
   runApp(const ProviderScope(child: MotifyApp()));

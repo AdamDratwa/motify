@@ -50,6 +50,10 @@ class AppBlockingService {
   Future<void> requestBlockingPermission() =>
       _channel.invokeMethod('requestBlockingPermission');
 
+  /// Opens Motify's App info page in system settings (Android), where
+  /// "Allow restricted settings" lives for apps installed from a file.
+  Future<void> openAppInfo() => _channel.invokeMethod('openAppInfo');
+
   /// Stores the rules and today's step count on-device, so the native side
   /// can decide instantly and offline whether to lock an app when it comes
   /// to the foreground (mirroring [evaluateGate]). Pass a null [steps] when

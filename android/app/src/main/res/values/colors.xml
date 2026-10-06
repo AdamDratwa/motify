@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- MotifyColors.background (lib/core/theme/motify_theme.dart): shown
+         while Flutter starts, so there's no white flash before the dark UI. -->
+    <color name="motify_background">#05080A</color>
+</resources>

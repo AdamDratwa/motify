@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive icon background: MotifyColors.background with a faint neon grid.
+     Mirrors MotifyLogoPainter (lib/core/widgets/motify_logo.dart). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#05080A"
+        android:pathData="M0,0H108V108H0Z" />
+    <path
+        android:strokeColor="#1200FF9C"
+        android:strokeWidth="0.6"
+        android:pathData="M6,0V108M0,6H108M18,0V108M0,18H108M30,0V108M0,30H108M42,0V108M0,42H108M54,0V108M0,54H108M66,0V108M0,66H108M78,0V108M0,78H108M90,0V108M0,90H108M102,0V108M0,102H108" />
+</vector>

@@ -6,7 +6,9 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
+import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -15,6 +17,13 @@ import java.io.ByteArrayOutputStream
 
 private const val BLOCKING_CHANNEL = "com.motify.app/blocking"
 private const val ICON_SIZE_PX = 96
+
+// Settings.ACTION_ACCESSIBILITY_DETAILS_SETTINGS, spelled out because it isn't
+// in every SDK's public API; Settings rejects it unless the service is ours.
+private const val ACTION_ACCESSIBILITY_DETAILS_SETTINGS = "android.settings.ACCESSIBILITY_DETAILS_SETTINGS"
+// Undocumented but widely supported extras that highlight one Settings entry.
+private const val SETTINGS_FRAGMENT_ARGS_KEY = ":settings:fragment_args_key"
+private const val SETTINGS_SHOW_FRAGMENT_ARGS = ":settings:show_fragment_args"
 
 /**
  * Hosts the blocking channel used by lib/features/blocking/services/app_blocking_service.dart:
@@ -48,7 +57,14 @@ class MainActivity : FlutterFragmentActivity() {
                     }.start()
                     "hasBlockingPermission" -> result.success(isBlockingServiceEnabled())
                     "requestBlockingPermission" -> {
-                        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        openBlockingServiceSettings()
+                        result.success(null)
+                    }
+                    "openAppInfo" -> {
+                        startActivity(
+                            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                                .setData(Uri.fromParts("package", packageName, null)),
+                        )
                         result.success(null)
                     }
                     "syncLockState" -> {
@@ -63,6 +79,31 @@ class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    /**
+     * Opens the on/off switch for Motify's blocker directly where the phone
+     * supports it. Otherwise opens the Accessibility list, asking Settings to
+     * scroll to and highlight our entry (honoured by Pixel and many others).
+     */
+    private fun openBlockingServiceSettings() {
+        val service = ComponentName(this, BlockingAccessibilityService::class.java).flattenToString()
+        try {
+            startActivity(
+                Intent(ACTION_ACCESSIBILITY_DETAILS_SETTINGS)
+                    .putExtra(Intent.EXTRA_COMPONENT_NAME, service),
+            )
+        } catch (e: Exception) {
+            // ActivityNotFoundException / SecurityException on phones without it.
+            startActivity(
+                Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                    .putExtra(SETTINGS_FRAGMENT_ARGS_KEY, service)
+                    .putExtra(
+                        SETTINGS_SHOW_FRAGMENT_ARGS,
+                        Bundle().apply { putString(SETTINGS_FRAGMENT_ARGS_KEY, service) },
+                    ),
+            )
+        }
     }
 
     private fun isBlockingServiceEnabled(): Boolean {

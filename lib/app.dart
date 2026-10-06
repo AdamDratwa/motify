@@ -11,8 +11,8 @@ class MotifyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Motify',
       debugShowCheckedModeBanner: false,
-      theme: MotifyTheme.light,
-      darkTheme: MotifyTheme.dark,
+      // Always dark: the terminal look is the brand, not a preference.
+      theme: MotifyTheme.dark,
       home: const OnboardingScreen(),
     );
   }

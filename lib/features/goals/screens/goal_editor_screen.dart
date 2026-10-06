@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/firebase_status.dart';
+import '../../../core/theme/motify_theme.dart';
+import '../../../core/widgets/terminal_widgets.dart';
 import '../../blocking/services/app_blocking_service.dart';
 import '../models/app_rule.dart';
 import '../models/free_window.dart';
@@ -71,8 +74,11 @@ class _GoalEditorScreenState extends ConsumerState<GoalEditorScreen> {
   Future<void> _save() async {
     final repo = ref.read(goalsRepositoryProvider);
     if (repo == null) {
-      _showError('Not signed in to Firebase, so rules can\'t be saved yet. '
-          'Check that Firebase is configured and Anonymous sign-in is enabled.');
+      final error = firebaseStartupError;
+      _showError(error == null
+          ? 'Not signed in to Firebase, so rules can\'t be saved yet. '
+              'Check that Firebase is configured and Anonymous sign-in is enabled.'
+          : 'Can\'t save: ${describeFirebaseStartupError(error)}');
       return;
     }
 
@@ -109,26 +115,25 @@ class _GoalEditorScreenState extends ConsumerState<GoalEditorScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Gate an app')),
+      appBar: AppBar(title: const Text('NEW TARGET')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('App', style: Theme.of(context).textTheme.titleMedium),
+          const TerminalLabel('app_to_lock'),
           const SizedBox(height: 8),
           _buildAppPicker(),
           const SizedBox(height: 24),
-          Text('Goal', style: Theme.of(context).textTheme.titleMedium),
+          const TerminalLabel('unlock_key'),
           const SizedBox(height: 8),
           TextField(
             controller: _targetController,
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(
               labelText: 'Steps required to unlock',
-              border: OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 24),
-          Text('When is this off?', style: Theme.of(context).textTheme.titleMedium),
+          const TerminalLabel('free_windows'),
           SwitchListTile(
             title: const Text('Free on weekends'),
             value: _weekendsFree,
@@ -143,8 +148,11 @@ class _GoalEditorScreenState extends ConsumerState<GoalEditorScreen> {
           FilledButton(
             onPressed: _saving ? null : _save,
             child: _saving
-                ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Save'),
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: MotifyColors.onNeon),
+                  )
+                : const Text('SAVE & LOCK'),
           ),
         ],
       ),
@@ -163,7 +171,6 @@ class _GoalEditorScreenState extends ConsumerState<GoalEditorScreen> {
             controller: _appIdController,
             decoration: const InputDecoration(
               labelText: 'App id (package name / bundle id)',
-              border: OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 12),
@@ -171,7 +178,6 @@ class _GoalEditorScreenState extends ConsumerState<GoalEditorScreen> {
             controller: _appNameController,
             decoration: const InputDecoration(
               labelText: 'Display name',
-              border: OutlineInputBorder(),
             ),
           ),
         ],
@@ -232,7 +238,6 @@ class _AppPickerSheetState extends State<_AppPickerSheet> {
               decoration: const InputDecoration(
                 hintText: 'Search apps',
                 prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
               ),
             ),
           ),

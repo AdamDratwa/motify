@@ -49,6 +49,13 @@ workflows:
         script: |
           if [ -n "${GOOGLE_SERVICES_JSON:-}" ]; then
             echo $GOOGLE_SERVICES_JSON | base64 --decode > android/app/google-services.json
+            if grep -q '"package_name": *"com.motify.motify"' android/app/google-services.json; then
+              echo "google-services.json restored (com.motify.motify found)"
+            else
+              echo "WARNING: google-services.json restored but has no Android app for com.motify.motify"
+            fi
+          else
+            echo "WARNING: GOOGLE_SERVICES_JSON not set - this build will run without Firebase"
           fi
       - name: Get Flutter packages
         script: flutter packages pub get
