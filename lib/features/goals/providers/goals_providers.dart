@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../blocking/services/app_blocking_service.dart';
@@ -7,7 +8,11 @@ import '../models/app_rule.dart';
 import '../models/gate_decision.dart';
 import '../repository/goals_repository.dart';
 
-final currentUidProvider = Provider<String?>((ref) => FirebaseAuth.instance.currentUser?.uid);
+// Null when Firebase isn't configured (see main.dart), so the app still opens.
+final currentUidProvider = Provider<String?>((ref) {
+  if (Firebase.apps.isEmpty) return null;
+  return FirebaseAuth.instance.currentUser?.uid;
+});
 
 final goalsRepositoryProvider = Provider<GoalsRepository?>((ref) {
   final uid = ref.watch(currentUidProvider);
@@ -17,7 +22,7 @@ final goalsRepositoryProvider = Provider<GoalsRepository?>((ref) {
 
 final appRulesProvider = StreamProvider<List<AppRule>>((ref) {
   final repo = ref.watch(goalsRepositoryProvider);
-  if (repo == null) return const Stream.empty();
+  if (repo == null) return Stream.value(const []);
   return repo.watchRules();
 });
 

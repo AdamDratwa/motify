@@ -47,3 +47,10 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+// google-services.json comes from the Firebase console (or Codemagic's
+// GOOGLE_SERVICES_JSON secret); only wire Firebase in when it is present so
+// the app still builds without it.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
