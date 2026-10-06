@@ -55,24 +55,50 @@ class StepsPermissionDenied implements Exception {
   const StepsPermissionDenied();
 }
 
-/// Rules paired with today's lock decision. Step-count failures don't block
-/// this: until steps are known (or if reading them fails) progress counts as
-/// 0, so goals still show and apps stay locked, which is the safe default.
+/// Whether Motify may read app usage time (needed for daily limits); null
+/// where the platform doesn't support it.
+final usageAccessProvider = FutureProvider<bool?>((ref) async {
+  try {
+    return await ref.watch(appBlockingServiceProvider).hasUsageAccess();
+  } on MissingPluginException {
+    return null;
+  }
+});
+
+/// Minutes used today per app, for the apps that have a daily limit. Empty
+/// without usage access. Refreshed by the home screen while it's visible.
+final usageTodayProvider = FutureProvider<Map<String, int>>((ref) async {
+  final rules = ref.watch(appRulesProvider).valueOrNull ?? const [];
+  final appIds = [
+    for (final r in rules)
+      if (r.dailyLimitMinutes != null) r.appId,
+  ];
+  if (appIds.isEmpty || await ref.watch(usageAccessProvider.future) != true) return const {};
+  return ref.watch(appBlockingServiceProvider).getUsageToday(appIds);
+});
+
+/// Rules paired with today's lock decision. Step and usage failures don't
+/// block this: unknown steps count as 0 (apps with a step goal stay locked,
+/// the safe default) and unknown usage as 0 minutes.
 final gateDecisionsProvider = Provider<AsyncValue<List<GateDecisionEntry>>>((ref) {
   final rules = ref.watch(appRulesProvider);
   final stepCount = ref.watch(todayStepsProvider).valueOrNull ?? 0;
+  final usage = ref.watch(usageTodayProvider).valueOrNull ?? const {};
 
-  return rules.whenData((rulesList) => [
-        for (final rule in rulesList)
-          GateDecisionEntry(
+  return rules.whenData(
+    (rulesList) => [
+      for (final rule in rulesList)
+        GateDecisionEntry(
+          rule: rule,
+          decision: evaluateGate(
             rule: rule,
-            decision: evaluateGate(
-              rule: rule,
-              now: DateTime.now(),
-              currentProgress: stepCount,
-            ),
+            now: DateTime.now(),
+            steps: stepCount,
+            usedMinutes: usage[rule.appId] ?? 0,
           ),
-      ]);
+        ),
+    ],
+  );
 });
 
 class GateDecisionEntry {

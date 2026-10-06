@@ -5,16 +5,15 @@ class SimpleTime implements Comparable<SimpleTime> {
   final int minute;
 
   const SimpleTime(this.hour, this.minute)
-      : assert(hour >= 0 && hour < 24),
-        assert(minute >= 0 && minute < 60);
+    : assert(hour >= 0 && hour < 24),
+      assert(minute >= 0 && minute < 60);
 
   factory SimpleTime.fromDateTime(DateTime dt) => SimpleTime(dt.hour, dt.minute);
 
   int get minutesSinceMidnight => hour * 60 + minute;
 
   @override
-  int compareTo(SimpleTime other) =>
-      minutesSinceMidnight.compareTo(other.minutesSinceMidnight);
+  int compareTo(SimpleTime other) => minutesSinceMidnight.compareTo(other.minutesSinceMidnight);
 
   bool operator <(SimpleTime other) => compareTo(other) < 0;
   bool operator <=(SimpleTime other) => compareTo(other) <= 0;
@@ -27,6 +26,12 @@ class SimpleTime implements Comparable<SimpleTime> {
       SimpleTime(json['hour'] as int, json['minute'] as int);
 
   @override
-  String toString() =>
-      '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+  bool operator ==(Object other) =>
+      other is SimpleTime && other.hour == hour && other.minute == minute;
+
+  @override
+  int get hashCode => Object.hash(hour, minute);
+
+  @override
+  String toString() => '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
 }

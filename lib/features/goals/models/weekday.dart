@@ -6,12 +6,12 @@ extension WeekdayFromDateTime on DateTime {
 
 extension WeekdayLabel on Weekday {
   String get shortLabel => switch (this) {
-        Weekday.monday => 'Mon',
-        Weekday.tuesday => 'Tue',
-        Weekday.wednesday => 'Wed',
-        Weekday.thursday => 'Thu',
-        Weekday.friday => 'Fri',
-        Weekday.saturday => 'Sat',
-        Weekday.sunday => 'Sun',
-      };
+    Weekday.monday => 'Mon',
+    Weekday.tuesday => 'Tue',
+    Weekday.wednesday => 'Wed',
+    Weekday.thursday => 'Thu',
+    Weekday.friday => 'Fri',
+    Weekday.saturday => 'Sat',
+    Weekday.sunday => 'Sun',
+  };
 }

@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -32,6 +33,8 @@ class LockActivity : Activity() {
         private const val EXTRA_PACKAGE = "packageName"
         private const val EXTRA_APP_NAME = "appName"
         private const val EXTRA_STEPS_LEFT = "stepsLeft"
+        private const val EXTRA_REASON = "reason"
+        private const val EXTRA_LIMIT_MINUTES = "limitMinutes"
 
         // Same palette as MotifyColors in lib/core/theme/motify_theme.dart.
         private const val BACKGROUND = 0xFF05080A.toInt()
@@ -47,12 +50,15 @@ class LockActivity : Activity() {
                 .putExtra(EXTRA_PACKAGE, lock.packageName)
                 .putExtra(EXTRA_APP_NAME, lock.appName)
                 .putExtra(EXTRA_STEPS_LEFT, lock.stepsLeft)
+                .putExtra(EXTRA_REASON, lock.reason.name)
+                .putExtra(EXTRA_LIMIT_MINUTES, lock.limitMinutes)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
     }
 
     private val scope = MainScope()
     private lateinit var targetView: TextView
-    private lateinit var stepsView: TextView
+    private lateinit var detailView: TextView
+    private lateinit var checkStepsButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,10 +69,10 @@ class LockActivity : Activity() {
         }
         val subtitle = terminalText("// motify blocker", TEXT_DIM, 13f)
         targetView = terminalText("", TEXT, 16f)
-        stepsView = terminalText("", NEON, 16f, bold = true).apply {
+        detailView = terminalText("", NEON, 16f, bold = true).apply {
             setShadowLayer(dp(6).toFloat(), 0f, 0f, NEON)
         }
-        val checkSteps = terminalButton("CHECK MY STEPS", filled = true) { openMotify() }
+        checkStepsButton = terminalButton("CHECK MY STEPS", filled = true) { openMotify() }
         val goHome = terminalButton("GO TO HOME SCREEN", filled = false) { goHome() }
 
         val padding = dp(28)
@@ -78,8 +84,8 @@ class LockActivity : Activity() {
             addView(title)
             addView(subtitle, spacedParams(top = dp(4)))
             addView(targetView, spacedParams(top = dp(32)))
-            addView(stepsView, spacedParams(top = dp(8)))
-            addView(checkSteps, spacedParams(top = dp(48)))
+            addView(detailView, spacedParams(top = dp(8)))
+            addView(checkStepsButton, spacedParams(top = dp(48)))
             addView(goHome, spacedParams(top = dp(12)))
         })
 
@@ -102,14 +108,16 @@ class LockActivity : Activity() {
         super.onResume()
         val lockedPackage = intent.getStringExtra(EXTRA_PACKAGE) ?: return
         scope.launch {
-            val steps = StepReader.readStepsToday(this@LockActivity) ?: return@launch
-            BlockingStore.saveSteps(this@LockActivity, steps)
-            val lock = BlockingStore.lockFor(this@LockActivity, lockedPackage)
-            if (lock == null) {
-                // Goal met since the last sync: drop back into the app underneath.
-                finish()
-            } else {
-                showLock(lock.appName, lock.stepsLeft)
+            // Allowed here because we're in the foreground; the stored count
+            // may be up to 15 minutes old (StepSyncWorker).
+            StepReader.readStepsToday(this@LockActivity)?.let {
+                BlockingStore.saveSteps(this@LockActivity, it)
+            }
+            when (val decision = BlockingStore.evaluate(this@LockActivity, lockedPackage)) {
+                is BlockingStore.Decision.Locked -> showLock(decision.lock)
+                // Goal met (or rule changed) since the lock was shown: drop
+                // back into the app underneath.
+                else -> finish()
             }
         }
     }
@@ -124,13 +132,32 @@ class LockActivity : Activity() {
     override fun onBackPressed() = goHome()
 
     private fun bind(intent: Intent) = showLock(
-        appName = intent.getStringExtra(EXTRA_APP_NAME) ?: "This app",
-        stepsLeft = intent.getIntExtra(EXTRA_STEPS_LEFT, 0),
+        BlockingStore.Lock(
+            packageName = intent.getStringExtra(EXTRA_PACKAGE) ?: "",
+            appName = intent.getStringExtra(EXTRA_APP_NAME) ?: "This app",
+            reason = BlockingStore.LockReason.valueOf(
+                intent.getStringExtra(EXTRA_REASON) ?: BlockingStore.LockReason.STEPS_NOT_MET.name,
+            ),
+            stepsLeft = intent.getIntExtra(EXTRA_STEPS_LEFT, 0),
+            limitMinutes = intent.getIntExtra(EXTRA_LIMIT_MINUTES, 0),
+        ),
     )
 
-    private fun showLock(appName: String, stepsLeft: Int) {
-        targetView.text = "> target: $appName\n> status: locked"
-        stepsView.text = "> ${NumberFormat.getIntegerInstance().format(stepsLeft)} steps until unlock"
+    private fun showLock(lock: BlockingStore.Lock) {
+        val number = NumberFormat.getIntegerInstance()
+        when (lock.reason) {
+            BlockingStore.LockReason.STEPS_NOT_MET -> {
+                targetView.text = "> target: ${lock.appName}\n> status: locked"
+                detailView.text = "> ${number.format(lock.stepsLeft)} steps until unlock"
+                checkStepsButton.visibility = View.VISIBLE
+            }
+            BlockingStore.LockReason.TIME_LIMIT_REACHED -> {
+                targetView.text = "> target: ${lock.appName}\n> status: time's up"
+                detailView.text = "> daily limit of ${lock.limitMinutes} min used\n> resets at midnight"
+                // Walking won't lift a time limit, so don't suggest it.
+                checkStepsButton.visibility = View.GONE
+            }
+        }
     }
 
     private fun terminalText(text: String, color: Int, sizeSp: Float, bold: Boolean = false) =

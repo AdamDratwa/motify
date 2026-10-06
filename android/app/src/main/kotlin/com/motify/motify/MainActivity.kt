@@ -30,6 +30,8 @@ private const val SETTINGS_SHOW_FRAGMENT_ARGS = ":settings:show_fragment_args"
  *  - getInstalledApps: launchable apps for the "which app to gate" picker
  *  - hasBlockingPermission / requestBlockingPermission: whether
  *    BlockingAccessibilityService is switched on, and the settings screen to do so
+ *  - hasUsageAccess / requestUsageAccess / getUsageToday: "Usage access" and
+ *    today's per-app foreground time, for daily limits ([UsageTracker])
  *  - syncLockState: stores rules + today's steps in [BlockingStore], which the
  *    accessibility service reads to decide whether to show [LockActivity]
  *
@@ -56,6 +58,20 @@ class MainActivity : FlutterFragmentActivity() {
                         }
                     }.start()
                     "hasBlockingPermission" -> result.success(isBlockingServiceEnabled())
+                    "hasUsageAccess" -> result.success(UsageTracker.hasAccess(this))
+                    "requestUsageAccess" -> {
+                        openUsageAccessSettings()
+                        result.success(null)
+                    }
+                    "getUsageToday" -> {
+                        val appIds = call.argument<List<String>>("appIds")?.toSet() ?: emptySet()
+                        // Reading a day of usage events can take a moment.
+                        Thread {
+                            val minutes = UsageTracker.usageToday(this, appIds)
+                                .mapValues { (it.value.millisToday / 60_000).toInt() }
+                            runOnUiThread { result.success(minutes) }
+                        }.start()
+                    }
                     "requestBlockingPermission" -> {
                         openBlockingServiceSettings()
                         result.success(null)
@@ -103,6 +119,18 @@ class MainActivity : FlutterFragmentActivity() {
                         Bundle().apply { putString(SETTINGS_FRAGMENT_ARGS_KEY, service) },
                     ),
             )
+        }
+    }
+
+    /** Opens Motify's own Usage access switch where supported, else the list. */
+    private fun openUsageAccessSettings() {
+        try {
+            startActivity(
+                Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                    .setData(Uri.fromParts("package", packageName, null)),
+            )
+        } catch (e: Exception) {
+            startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
         }
     }
 

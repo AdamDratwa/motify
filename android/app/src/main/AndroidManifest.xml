@@ -11,6 +11,12 @@
          Settings → Accessibility. Listing apps to gate uses the MAIN/LAUNCHER
          <queries> entry below, not QUERY_ALL_PACKAGES. -->
 
+    <!-- Daily time limits (UsageTracker). A special permission: declaring it
+         only makes Motify appear under Settings → Usage access, where the
+         user switches it on. -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+
     <application
         android:label="Motify"
         android:name="${applicationName}"

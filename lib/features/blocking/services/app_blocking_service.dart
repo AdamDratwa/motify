@@ -50,6 +50,25 @@ class AppBlockingService {
   Future<void> requestBlockingPermission() =>
       _channel.invokeMethod('requestBlockingPermission');
 
+  /// Whether Motify may read app usage time (Android's "Usage access"),
+  /// needed for daily time limits.
+  Future<bool> hasUsageAccess() async =>
+      await _channel.invokeMethod<bool>('hasUsageAccess') ?? false;
+
+  /// Opens the "Usage access" settings screen, on Motify's entry where the
+  /// phone supports that.
+  Future<void> requestUsageAccess() => _channel.invokeMethod('requestUsageAccess');
+
+  /// Minutes each of [appIds] has been in the foreground since midnight.
+  /// Apps without usage today are 0.
+  Future<Map<String, int>> getUsageToday(List<String> appIds) async {
+    final result = await _channel.invokeMethod<Map<dynamic, dynamic>>(
+      'getUsageToday',
+      {'appIds': appIds},
+    );
+    return {for (final e in (result ?? {}).entries) e.key as String: (e.value as num).toInt()};
+  }
+
   /// Opens Motify's App info page in system settings (Android), where
   /// "Allow restricted settings" lives for apps installed from a file.
   Future<void> openAppInfo() => _channel.invokeMethod('openAppInfo');
