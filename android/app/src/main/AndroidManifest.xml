@@ -12,7 +12,7 @@
          <queries> entry below, not QUERY_ALL_PACKAGES. -->
 
     <application
-        android:label="motify"
+        android:label="Motify"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
