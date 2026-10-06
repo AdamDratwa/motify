@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../blocking/services/app_blocking_service.dart';
@@ -29,22 +30,39 @@ final appRulesProvider = StreamProvider<List<AppRule>>((ref) {
 final stepServiceProvider = Provider((ref) => StepService());
 final appBlockingServiceProvider = Provider((ref) => AppBlockingService());
 
+/// Whether app blocking is switched on; null where the platform doesn't
+/// support it yet (iOS until Phase 3).
+final blockingEnabledProvider = FutureProvider<bool?>((ref) async {
+  try {
+    return await ref.watch(appBlockingServiceProvider).hasBlockingPermission();
+  } on MissingPluginException {
+    return null;
+  }
+});
+
 /// Today's step count, refreshed on read. In Phase 2+ this should also be
 /// pushed to [AppBlockingService.syncLockState] whenever it changes so the
 /// native overlay stays in sync without polling Dart.
 final todayStepsProvider = FutureProvider<int>((ref) async {
   final service = ref.watch(stepServiceProvider);
-  await service.requestPermissions();
+  // Only check here: this re-runs on every refresh/resume, and prompting each
+  // time would reopen the permission screen right after the user dismissed it.
+  if (!await service.hasPermissions()) throw const StepsPermissionDenied();
   return service.getStepsToday();
 });
 
+class StepsPermissionDenied implements Exception {
+  const StepsPermissionDenied();
+}
+
+/// Rules paired with today's lock decision. Step-count failures don't block
+/// this: until steps are known (or if reading them fails) progress counts as
+/// 0, so goals still show and apps stay locked, which is the safe default.
 final gateDecisionsProvider = Provider<AsyncValue<List<GateDecisionEntry>>>((ref) {
   final rules = ref.watch(appRulesProvider);
-  final steps = ref.watch(todayStepsProvider);
+  final stepCount = ref.watch(todayStepsProvider).valueOrNull ?? 0;
 
-  return rules.when(
-    data: (rulesList) => steps.when(
-      data: (stepCount) => AsyncValue.data([
+  return rules.whenData((rulesList) => [
         for (final rule in rulesList)
           GateDecisionEntry(
             rule: rule,
@@ -54,13 +72,7 @@ final gateDecisionsProvider = Provider<AsyncValue<List<GateDecisionEntry>>>((ref
               currentProgress: stepCount,
             ),
           ),
-      ]),
-      loading: () => const AsyncValue.loading(),
-      error: (e, st) => AsyncValue.error(e, st),
-    ),
-    loading: () => const AsyncValue.loading(),
-    error: (e, st) => AsyncValue.error(e, st),
-  );
+      ]);
 });
 
 class GateDecisionEntry {

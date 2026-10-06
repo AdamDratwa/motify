@@ -3,15 +3,13 @@
     <!-- Health Connect: step data for goal progress -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <!-- Lets StepSyncWorker read steps while Motify isn't open -->
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
 
-    <!-- Phase 2 (see README roadmap): app-blocking permissions.
-         PACKAGE_USAGE_STATS is a special permission granted via
-         Settings.ACTION_USAGE_ACCESS_SETTINGS, not a manifest request.
-         The accessibility service + its config XML resource, and
-         QUERY_ALL_PACKAGES (needed to list installed apps to gate), are
-         added once BlockingAccessibilityService is implemented. -->
-    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
-        tools:ignore="ProtectedPermissions" />
+    <!-- App blocking needs no manifest permission: it runs through
+         BlockingAccessibilityService below, which the user switches on in
+         Settings → Accessibility. Listing apps to gate uses the MAIN/LAUNCHER
+         <queries> entry below, not QUERY_ALL_PACKAGES. -->
 
     <application
         android:label="motify"
@@ -38,7 +36,45 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Health Connect (Android 13 and below): explains why we read steps -->
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
         </activity>
+        <!-- Health Connect (Android 14+): same rationale, via the system permission screen -->
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".MainActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- App blocking: detects gated apps coming to the foreground... -->
+        <service
+            android:name=".BlockingAccessibilityService"
+            android:exported="true"
+            android:label="@string/blocking_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/blocking_accessibility_service" />
+        </service>
+        <!-- ...and covers them with this screen. Own task so leaving it never
+             drops the user back into Motify or the locked app. -->
+        <activity
+            android:name=".LockActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.motify.motify.lock"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
@@ -54,6 +90,11 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Launchable apps, for the "which app to gate" picker -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
         </intent>
         <!-- Health Connect package visibility -->
         <package android:name="com.google.android.apps.healthdata" />

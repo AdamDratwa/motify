@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="blocking_service_label">Motify app blocker</string>
+    <string name="blocking_service_description">Lets Motify see which app you open, so it can lock the apps you chose until you reach today\'s goal. Motify does not read anything you see or type in other apps.</string>
+</resources>

@@ -12,16 +12,8 @@ class OnboardingScreen extends ConsumerWidget {
     WidgetRef ref,
   ) async {
     await ref.read(stepServiceProvider).requestPermissions();
-    try {
-      final hasPermission =
-          await ref.read(appBlockingServiceProvider).hasBlockingPermission();
-      if (!hasPermission) {
-        await ref.read(appBlockingServiceProvider).requestBlockingPermission();
-      }
-    } catch (_) {
-      // Native blocking module isn't implemented yet (Phase 2/3 of the
-      // roadmap) — step tracking and goal editing still work without it.
-    }
+    // Blocking is switched on from the home screen's banner instead, which
+    // explains the Accessibility settings step before sending the user there.
     if (context.mounted) {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const HomeScreen()),

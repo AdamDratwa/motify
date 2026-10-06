@@ -25,6 +25,7 @@ class _GoalEditorScreenState extends ConsumerState<GoalEditorScreen> {
   InstalledApp? _selectedApp;
   bool _weekendsFree = true;
   bool _freeAfter4pm = false;
+  bool _saving = false;
   final List<FreeWindow> _customWindows = [];
 
   @override
@@ -63,14 +64,25 @@ class _GoalEditorScreenState extends ConsumerState<GoalEditorScreen> {
     return windows;
   }
 
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Future<void> _save() async {
     final repo = ref.read(goalsRepositoryProvider);
-    if (repo == null) return;
+    if (repo == null) {
+      _showError('Not signed in to Firebase, so rules can\'t be saved yet. '
+          'Check that Firebase is configured and Anonymous sign-in is enabled.');
+      return;
+    }
 
     final appId = _selectedApp?.appId ?? _appIdController.text.trim();
     final appName = _selectedApp?.displayName ?? _appNameController.text.trim();
     final target = int.tryParse(_targetController.text) ?? 10000;
-    if (appId.isEmpty || appName.isEmpty) return;
+    if (appId.isEmpty || appName.isEmpty) {
+      _showError('Pick an app (or fill in both the app id and display name).');
+      return;
+    }
 
     final rule = AppRule(
       id: appId,
@@ -81,8 +93,17 @@ class _GoalEditorScreenState extends ConsumerState<GoalEditorScreen> {
       freeWindows: _buildFreeWindows(),
     );
 
-    await repo.upsertRule(rule);
-    if (mounted) Navigator.of(context).pop();
+    setState(() => _saving = true);
+    try {
+      // Firestore can wait indefinitely for the server (e.g. if the database
+      // hasn't been created), so don't let the button hang forever.
+      await repo.upsertRule(rule).timeout(const Duration(seconds: 15));
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) _showError('Couldn\'t save the rule: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -119,7 +140,12 @@ class _GoalEditorScreenState extends ConsumerState<GoalEditorScreen> {
             onChanged: (v) => setState(() => _freeAfter4pm = v),
           ),
           const SizedBox(height: 24),
-          FilledButton(onPressed: _save, child: const Text('Save')),
+          FilledButton(
+            onPressed: _saving ? null : _save,
+            child: _saving
+                ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Save'),
+          ),
         ],
       ),
     );
@@ -151,13 +177,93 @@ class _GoalEditorScreenState extends ConsumerState<GoalEditorScreen> {
         ],
       );
     }
-    return DropdownButtonFormField<InstalledApp>(
-      initialValue: _selectedApp,
-      items: _installedApps!
-          .map((a) => DropdownMenuItem(value: a, child: Text(a.displayName)))
-          .toList(),
-      onChanged: (v) => setState(() => _selectedApp = v),
-      decoration: const InputDecoration(border: OutlineInputBorder()),
+    final selected = _selectedApp;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: ListTile(
+        leading: selected == null ? const Icon(Icons.apps) : _AppIcon(app: selected),
+        title: Text(selected?.displayName ?? 'Choose an app'),
+        subtitle: selected == null ? null : Text(selected.appId),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: _pickApp,
+      ),
     );
+  }
+
+  Future<void> _pickApp() async {
+    final picked = await showModalBottomSheet<InstalledApp>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _AppPickerSheet(apps: _installedApps!),
+    );
+    if (picked != null) setState(() => _selectedApp = picked);
+  }
+}
+
+class _AppPickerSheet extends StatefulWidget {
+  final List<InstalledApp> apps;
+  const _AppPickerSheet({required this.apps});
+
+  @override
+  State<_AppPickerSheet> createState() => _AppPickerSheetState();
+}
+
+class _AppPickerSheetState extends State<_AppPickerSheet> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _query.toLowerCase();
+    final matches = widget.apps
+        .where((a) =>
+            a.displayName.toLowerCase().contains(query) || a.appId.toLowerCase().contains(query))
+        .toList();
+
+    return SizedBox(
+      height: MediaQuery.sizeOf(context).height * 0.85,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: TextField(
+              autofocus: true,
+              onChanged: (v) => setState(() => _query = v),
+              decoration: const InputDecoration(
+                hintText: 'Search apps',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: matches.length,
+              itemBuilder: (context, i) {
+                final app = matches[i];
+                return ListTile(
+                  leading: _AppIcon(app: app),
+                  title: Text(app.displayName),
+                  subtitle: Text(app.appId),
+                  onTap: () => Navigator.of(context).pop(app),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AppIcon extends StatelessWidget {
+  final InstalledApp app;
+  const _AppIcon({required this.app});
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = app.icon;
+    if (icon == null) return const Icon(Icons.android, size: 40);
+    return Image.memory(icon, width: 40, height: 40, gaplessPlayback: true);
   }
 }

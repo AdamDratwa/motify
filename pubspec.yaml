@@ -45,12 +45,12 @@ dependencies:
   firebase_messaging: ^15.1.5
 
   # Steps (wraps HealthKit on iOS / Health Connect on Android)
-  health: ^11.1.1
+  health: ^13.3.2
 
   # Local cache so blocking decisions work offline / instantly
   shared_preferences: ^2.3.3
 
-  intl: ^0.19.0
+  intl: ^0.20.2
 
 dev_dependencies:
   flutter_test:

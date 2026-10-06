@@ -48,6 +48,14 @@ flutter {
     source = "../.."
 }
 
+dependencies {
+    // Background step sync (StepSyncWorker).
+    implementation("androidx.work:work-runtime-ktx:2.11.2")
+    // Reading steps natively (StepReader). Same version as the `health`
+    // plugin uses, so there's one copy and no version drift between them.
+    implementation("androidx.health.connect:connect-client:1.2.0-alpha02")
+}
+
 // google-services.json comes from the Firebase console (or Codemagic's
 // GOOGLE_SERVICES_JSON secret); only wire Firebase in when it is present so
 // the app still builds without it.
